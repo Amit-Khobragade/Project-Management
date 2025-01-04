@@ -1,0 +1,20 @@
+{
+  "name": "project-manager",
+  "version": "1.0.0",
+  "description": "A node js CLI for simplifying project management",
+  "homepage": "https://github.com/Amit-Khobragade/Project-Management#readme",
+  "bugs": {
+    "url": "https://github.com/Amit-Khobragade/Project-Management/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Amit-Khobragade/Project-Management.git"
+  },
+  "license": "ISC",
+  "author": "Amit Khobragade",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
