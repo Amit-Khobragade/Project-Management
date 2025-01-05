@@ -10,11 +10,16 @@
     "type": "git",
     "url": "git+https://github.com/Amit-Khobragade/Project-Management.git"
   },
-  "license": "ISC",
+  "license": "OSL-3.0",
   "author": "Amit Khobragade",
   "type": "commonjs",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.2",
+    "chalk": "^5.4.1",
+    "prettier": "^3.4.2"
   }
 }
