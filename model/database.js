@@ -1,95 +1,70 @@
+/**
+ * This file is protected by the Open Software License (OSL) v. 3.0
+ * https://opensource.org/licenses/OSL-3.0
+ *
+ * This file contains the database connection and initalizes the database tables if they don't exist
+ */
 const Database = require('better-sqlite3');
 
 const db = new Database('project-tables.db');
 
-/**
- * Creates a new column in a table.
- * @param {string} tableName the name of the table
- * @param {string} name the name of the column to create
- * @param {string} type the type of the column to create
- * @returns {Object} A result object from the database
- */
-function createColumn(tableName, name, type) {
-  return db
-    .prepare(`ALTER TABLE @tableName ADD COLUMN @name @type`)
-    .run({ tableName, name, type });
-}
+// drop all tables only enable for testing
+// db.prepare(`DROP TABLE IF EXISTS person`).run();
+// db.prepare(`DROP TABLE IF EXISTS task`).run();
+// db.prepare(`DROP TABLE IF EXISTS channel`).run();
+// db.prepare(`DROP TABLE IF EXISTS remainder`).run();
 
-/**
- * Deletes a column from a table. The column must already exist.
- * @param {string} tableName the name of the table
- * @param {string} name the name of the column to delete
- * @returns {Object} a result object from the database
- */
-function deleteColumn(tableName, name) {
-  return db
-    .prepare(`ALTER TABLE @tableName DROP COLUMN @name`)
-    .run({ tableName, name });
-}
-
-/**
- * Creates a new table with the given name, if it does not already exist.
- * The table will have an auto-incrementing id column.
- * @param {string} tableName the name of the table to create
- * @returns {Object} a result object from the database
- */
-function createNewTable(tableName) {
-  return db
-    .function(
-      `
-    CREATE TABLE IF NOT EXISTS @tableName (
-      id INTEGER PRIMARY KEY AUTOINCREMENT
-    )
+// creating a person table
+db.prepare(
   `
-    )
-    .run({
-      tableName,
-    });
-}
+  CREATE TABLE IF NOT EXISTS person (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    task_id INTEGER,
+    FOREIGN KEY(task_id) REFERENCES task(id)
+  )
+`
+).run();
 
-/**
- * Drops a table from the database if it exists.
- * @param {string} tableName - The name of the table to drop.
- * @returns {Object} A result object from the database.
- */
-
-function dropTable(tableName) {
-  return db
-    .function(
-      `
-    DROP TABLE IF EXISTS @tableName
+// creating a task table
+db.prepare(
   `
-    )
-    .run({
-      tableName,
-    });
-}
+  CREATE TABLE IF NOT EXISTS task (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    assigned_to INTEGER,
+    related_channel INTEGER,
+    task_status TEXT,
+    start_date TEXT,
+    deadline TEXT,
+    FOREIGN KEY(assigned_to) REFERENCES person(id),
+    FOREIGN KEY(related_channel) REFERENCES channel(id)
+  )
+`
+).run();
 
-/**
- * Gets an array of all table names in the database, excluding the sqlite_sequence table.
- * @returns {string[]} An array of table names.
- */
-function getAllTables() {
-  const tables = db
-    .prepare(
-      `
-      SELECT name 
-      FROM sqlite_master 
-      WHERE type='table'
-      `
-    )
-    .all();
-  return tables.filter((table) => table.name !== 'sqlite_sequence');
-}
+// creating a channel table
+db.prepare(
+  `
+  CREATE TABLE IF NOT EXISTS channel (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    channel_name TEXT NOT NULL
+  )
+`
+).run();
 
-/**
- * Retrieves all data from a table in the database.
- * @param {string} tableName - The name of the table to retrieve data from.
- * @returns {Object[]} An array of objects, each representing a row in the table.
- */
-function getTableData(tableName) {
-  return db.prepare(`SELECT * FROM @tableName`).all({ tableName });
-}
+// creating a remainder table
+db.prepare(
+  `
+  CREATE TABLE IF NOT EXISTS remainder (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER NOT NULL,
+    remainder_date TEXT NOT NULL,
+    reminder_time TEXT NOT NULL,
+    FOREIGN KEY(task_id) REFERENCES task(id)
+  )
+`
+).run();
 
 // Close the database on exit
 process.on('exit', (code) => {
@@ -97,10 +72,5 @@ process.on('exit', (code) => {
 });
 
 exports.default = {
-  createColumn,
-  deleteColumn,
-  createNewTable,
-  dropTable,
-  getAllTables,
-  getTableData,
+  database: db,
 };
