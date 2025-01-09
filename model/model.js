@@ -60,20 +60,65 @@ function addOrUpdatePerson({ id, name, task_id }) {
 }
 
 /**
- * Retrieves a list of tasks from the database based on the provided parameters.
- * @param {string} [orderBy='title'] - The field to order the results by (either title, start_date, or deadline).
- * @param {string} [sort='ASC'] - The sort order for the results (either ascending or descending).
- * @param {number} [limit=50] - The maximum number of tasks to retrieve.
- * @returns {Promise<Array<Object>>} - An array of tasks matching the specified criteria.
+ * Retrieves a list of tasks from the database based on the provided filters.
+ * @param {Object} filters - The filters to apply to the query.
+ * @param {number} [filters.id] - The ID of the task to retrieve.
+ * @param {number} [filters.assignedTo] - The ID of the person assigned to the task.
+ * @param {number} [filters.relatedChannel] - The ID of the related channel.
+ * @param {string} [filters.taskStatus] - The status of the task.
+ * @param {string} [filters.orderBy='title'] - The field to order the results by.
+ * @param {string} [filters.sort='ASC'] - The sort order for the results (ASC or DESC).
+ * @param {number} [filters.limit=50] - The maximum number of tasks to retrieve.
+ * @returns {Promise<Array<Object>> | Promise<Object | null>} - An array of tasks or a single task.
  */
-async function getTasks(orderBy = 'title', sort = 'ASC', limit = 50) {
-  const result = await database
-    .prepare(`SELECT * FROM task ORDER BY @orderBy @sort LIMIT @limit`)
-    .all({
-      sort,
-      limit,
-      orderBy,
-    });
+async function getTasks(filters = {}) {
+  const {
+    id,
+    assignedTo,
+    relatedChannel,
+    taskStatus,
+    orderBy = 'title',
+    sort = 'ASC',
+    limit = 50,
+  } = filters;
+
+  const conditions = [];
+  const params = {};
+
+  if (id !== undefined) {
+    conditions.push('id = @id');
+    params.id = id;
+  }
+  if (assignedTo !== undefined) {
+    conditions.push('assigned_to = @assignedTo');
+    params.assignedTo = assignedTo;
+  }
+  if (relatedChannel !== undefined) {
+    conditions.push('related_channel = @relatedChannel');
+    params.relatedChannel = relatedChannel;
+  }
+  if (taskStatus !== undefined) {
+    conditions.push('task_status = @taskStatus');
+    params.taskStatus = taskStatus;
+  }
+
+  const whereClause = conditions.length
+    ? `WHERE ${conditions.join(' AND ')}`
+    : '';
+  const query = `
+    SELECT * FROM task
+    ${whereClause}
+    ORDER BY ${orderBy} ${sort}
+    LIMIT @limit
+  `;
+
+  params.limit = limit;
+
+  const result =
+    id !== undefined
+      ? await database.prepare(query).get(params) // Return single task for ID filter
+      : await database.prepare(query).all(params); // Return list of tasks for other filters
+
   return result;
 }
 
@@ -135,9 +180,75 @@ function addOrUpdateTask({
   return result;
 }
 
+/**
+ * Retrieves channels from the database based on the provided filters.
+ * @param {Object} filters - The filters to apply to the query.
+ * @param {number} [filters.id] - The ID of the channel to retrieve.
+ * @param {string} [filters.orderBy='channel_name'] - The field to order the results by.
+ * @param {string} [filters.sort='ASC'] - The sort order for the results (ASC or DESC).
+ * @param {number} [filters.limit=50] - The maximum number of channels to retrieve.
+ * @returns {Promise<Array<Object>> | Promise<Object | null>} - An array of channels or a single channel.
+ */
+async function getChannels(filters = {}) {
+  const { id, orderBy = 'channel_name', sort = 'ASC', limit = 50 } = filters;
+
+  const conditions = [];
+  const params = {};
+
+  if (id !== undefined) {
+    conditions.push('id = @id');
+    params.id = id;
+  }
+
+  const whereClause = conditions.length
+    ? `WHERE ${conditions.join(' AND ')}`
+    : '';
+  const query = `
+    SELECT * FROM channel
+    ${whereClause}
+    ORDER BY ${orderBy} ${sort}
+    LIMIT @limit
+  `;
+
+  params.limit = limit;
+
+  const result =
+    id !== undefined
+      ? await database.prepare(query).get(params) // Return single channel for ID filter
+      : await database.prepare(query).all(params); // Return list of channels for other filters
+
+  return result;
+}
+
+/**
+ * Adds or updates a channel in the database.
+ * @param {Object} channel - The channel object to add or update.
+ * @param {number} [channel.id] - The ID of the channel to update.
+ * @param {string} channel.channel_name - The name of the channel.
+ * @returns {Object} - The result of the database operation.
+ */
+function addOrUpdateChannel({ id, channel_name }) {
+  let statement = '';
+  const params = {
+    channel_name,
+  };
+
+  if (id) {
+    statement = `UPDATE channel SET channel_name = @channel_name WHERE id = @id`;
+    params.id = id;
+  } else {
+    statement = `INSERT INTO channel (channel_name) VALUES (@channel_name)`;
+  }
+
+  const result = database.prepare(statement).run(params);
+  return result;
+}
+
 module.exports = {
   getPersons,
   addOrUpdatePerson,
   addOrUpdateTask,
   getTasks,
+  getChannels,
+  addOrUpdateChannel,
 };
