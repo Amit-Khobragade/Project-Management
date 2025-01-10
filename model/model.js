@@ -244,11 +244,188 @@ function addOrUpdateChannel({ id, channel_name }) {
   return result;
 }
 
+/**
+ * Retrieves remainders from the database based on the provided filters.
+ * @param {Object} filters - The filters to apply to the query.
+ * @param {number} [filters.id] - The ID of the remainder to retrieve.
+ * @param {number} [filters.task_id] - The ID of the task to filter by.
+ * @param {string} [filters.orderBy='remainder_date'] - The field to order the results by.
+ * @param {string} [filters.sort='ASC'] - The sort order for the results (ASC or DESC).
+ * @param {number} [filters.limit=50] - The maximum number of remainders to retrieve.
+ * @returns {Promise<Array<Object>> | Promise<Object | null>} - An array of remainders or a single remainder.
+ */
+async function getRemainder(filters = {}) {
+  const {
+    id,
+    task_id,
+    orderBy = 'remainder_date',
+    sort = 'ASC',
+    limit = 50,
+  } = filters;
+
+  const conditions = [];
+  const params = { limit };
+
+  if (id !== undefined) {
+    conditions.push('id = @id');
+    params.id = id;
+  }
+  if (task_id !== undefined) {
+    conditions.push('task_id = @task_id');
+    params.task_id = task_id;
+  }
+
+  const whereClause =
+    conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+  const query = `
+    SELECT * FROM remainder 
+    ${whereClause}
+    ORDER BY ${orderBy} ${sort}
+    LIMIT @limit
+  `;
+
+  const result = await database.prepare(query).all(params);
+  return id ? result[0] || null : result;
+}
+
+/**
+ * Adds or updates a remainder in the database.
+ * @param {Object} remainder - The remainder object to add or update.
+ * @param {number} [remainder.id] - The ID of the remainder to update.
+ * @param {number} remainder.task_id - The ID of the task associated with the remainder.
+ * @param {string} [remainder.remainder_date] - The date of the remainder.
+ * @param {string} [remainder.reminder_time] - The time of the remainder.
+ * @returns {Object} - The result of the database operation.
+ */
+function addOrUpdateRemainder({ id, task_id, remainder_date, reminder_time }) {
+  if (!task_id) {
+    throw new Error('Task ID is required');
+  }
+
+  const params = { task_id };
+  const setClauses = ['task_id = @task_id'];
+
+  if (remainder_date) {
+    params.remainder_date = remainder_date;
+    setClauses.push('remainder_date = @remainder_date');
+  }
+
+  if (reminder_time) {
+    params.reminder_time = reminder_time;
+    setClauses.push('reminder_time = @reminder_time');
+  }
+
+  const statement = id
+    ? `UPDATE remainder SET ${setClauses.join(', ')} WHERE id = @id`
+    : `INSERT INTO remainder (${Object.keys(params).join(', ')}) 
+       VALUES (${Object.keys(params)
+         .map((k) => `@${k}`)
+         .join(', ')})`;
+
+  if (id) params.id = id;
+
+  const result = database.prepare(statement).run(params);
+  return result;
+}
+
+/**
+ * Removes a person from the database.
+ * @param {number} id - The ID of the person to remove.
+ * @returns {Object} - The result of the database operation.
+ * @throws {Error} - If the ID is not provided or the person does not exist.
+ */
+function removePerson(id) {
+  if (!id) {
+    throw new Error('Person ID is required');
+  }
+
+  const person = database.prepare('SELECT * FROM person WHERE id = ?').get(id);
+  if (!person) {
+    throw new Error('Person not found');
+  }
+
+  const result = database.prepare('DELETE FROM person WHERE id = ?').run(id);
+  return result;
+}
+
+/**
+ * Removes a task from the database.
+ * @param {number} id - The ID of the task to remove.
+ * @returns {Object} - The result of the database operation.
+ * @throws {Error} - If the ID is not provided or the task does not exist.
+ */
+function removeTask(id) {
+  if (!id) {
+    throw new Error('Task ID is required');
+  }
+
+  const task = database.prepare('SELECT * FROM task WHERE id = ?').get(id);
+  if (!task) {
+    throw new Error('Task not found');
+  }
+
+  // First remove any remainders associated with this task
+  database.prepare('DELETE FROM remainder WHERE task_id = ?').run(id);
+
+  const result = database.prepare('DELETE FROM task WHERE id = ?').run(id);
+  return result;
+}
+
+/**
+ * Removes a channel from the database.
+ * @param {number} id - The ID of the channel to remove.
+ * @returns {Object} - The result of the database operation.
+ * @throws {Error} - If the ID is not provided or the channel does not exist.
+ */
+function removeChannel(id) {
+  if (!id) {
+    throw new Error('Channel ID is required');
+  }
+
+  const channel = database
+    .prepare('SELECT * FROM channel WHERE id = ?')
+    .get(id);
+  if (!channel) {
+    throw new Error('Channel not found');
+  }
+
+  const result = database.prepare('DELETE FROM channel WHERE id = ?').run(id);
+  return result;
+}
+
+/**
+ * Removes a remainder from the database.
+ * @param {number} id - The ID of the remainder to remove.
+ * @returns {Object} - The result of the database operation.
+ * @throws {Error} - If the ID is not provided or the remainder does not exist.
+ */
+function removeRemainder(id) {
+  if (!id) {
+    throw new Error('Remainder ID is required');
+  }
+
+  const remainder = database
+    .prepare('SELECT * FROM remainder WHERE id = ?')
+    .get(id);
+  if (!remainder) {
+    throw new Error('Remainder not found');
+  }
+
+  const result = database.prepare('DELETE FROM remainder WHERE id = ?').run(id);
+  return result;
+}
+
 module.exports = {
   getPersons,
   addOrUpdatePerson,
-  addOrUpdateTask,
   getTasks,
+  addOrUpdateTask,
   getChannels,
   addOrUpdateChannel,
+  getRemainder,
+  addOrUpdateRemainder,
+  removePerson,
+  removeTask,
+  removeChannel,
+  removeRemainder,
 };
