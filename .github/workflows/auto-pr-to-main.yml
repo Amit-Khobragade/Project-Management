@@ -1,0 +1,39 @@
+name: Create PR to Main on Development Merge
+
+on:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - development
+
+jobs:
+  create-pr:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Configure GitHub CLI for PR creation
+      - name: Install GitHub CLI
+        run: |
+          sudo apt-get install -y gh
+          gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
+
+      # Create a pull request to the main branch
+      - name: Create PR to Main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get the source branch name from the merged PR
+          SOURCE_BRANCH=$(echo "${GITHUB_HEAD_REF}")
+          PR_TITLE="PR to development merged requesting PR to Main. changes from ${SOURCE_BRANCH}"
+
+          # Create a pull request from development to main
+          gh pr create \
+            --base main \
+            --head development \
+            --title "$PR_TITLE" \
+            --body "This PR merges the changes from '${SOURCE_BRANCH}' to the main branch."
