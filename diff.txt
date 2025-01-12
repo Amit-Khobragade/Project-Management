@@ -1,0 +1,662 @@
+diff --git a/controller/PersonController.js b/controller/PersonController.js
+new file mode 100644
+index 0000000..e70d22a
+--- /dev/null
++++ b/controller/PersonController.js
+@@ -0,0 +1,233 @@
++/**
++ * This file is protected by the Open Software License (OSL) v. 3.0
++ * https://opensource.org/licenses/OSL-3.0
++ */
++
++const model = require('../model/model.js');
++
++/**
++ * Controller class for managing person-related operations with chainable methods
++ * @class PersonController
++ */
++class PersonController {
++  /** @private {string} Sort direction for person listing */
++  _sort = 'ASC';
++
++  /** @private {number} Index of the currently selected person */
++  _selectedPerson = 0;
++
++  /** @private {Array<Object>} Array containing person records */
++  _personTable = [];
++
++  /** @private {Promise<void>} Tracks pending operations */
++  _pendingOperation = Promise.resolve();
++
++  /**
++   * @private {Object} Filter settings for person queries
++   * @property {number|null} taskId - Filter by specific task ID
++   * @property {boolean} filterEmptyTasks - Whether to filter out persons with no tasks
++   */
++  _filters = {
++    taskId: null,
++    filterEmptyTasks: false,
++  };
++
++  /**
++   * Creates an instance of PersonController and initializes the person table
++   * @constructor
++   * @returns {PersonController} The PersonController instance
++   */
++  constructor() {
++    this._pendingOperation = this.refresh();
++    return this;
++  }
++
++  /**
++   * Queues an operation to be executed after previous operations complete
++   * @private
++   * @param {Function} operation - Async operation to queue
++   * @returns {PersonController} The PersonController instance for chaining
++   */
++  _queueOperation(operation) {
++    this._pendingOperation = this._pendingOperation.then(operation);
++    return this;
++  }
++
++  /**
++   * Waits for all pending operations to complete
++   * @async
++   * @returns {Promise<PersonController>} The PersonController instance
++   */
++  async ready() {
++    await this._pendingOperation;
++    return this;
++  }
++
++  /**
++   * Refreshes the person table with current filters and sort settings
++   * @async
++   * @returns {Promise<PersonController>} The PersonController instance
++   */
++  async refresh() {
++    this._personTable = await model.getPersonDetailsTable({
++      sort: this._sort,
++      filterEmptyTasks: this._filters.filterEmptyTasks,
++      taskId: this._filters.taskId,
++    });
++    return this;
++  }
++
++  /**
++   * Adds a new person to the database
++   * @param {Object} person - Person object to add
++   * @param {string} person.name - Name of the person
++   * @param {string} [person.email] - Email of the person
++   * @param {string} [person.role] - Role of the person
++   * @param {string} [person.department] - Department of the person
++   * @returns {PersonController} The PersonController instance
++   */
++  addPerson(person) {
++    return this._queueOperation(async () => {
++      await model.addOrUpdatePerson(person);
++      await this.refresh();
++    });
++  }
++
++  /**
++   * Updates an existing person in the database
++   * @param {Object} person - Person object with updates
++   * @param {number} person.id - ID of the person to update
++   * @param {string} [person.name] - Updated name of the person
++   * @param {string} [person.email] - Updated email of the person
++   * @param {string} [person.role] - Updated role of the person
++   * @param {string} [person.department] - Updated department of the person
++   * @returns {PersonController} The PersonController instance
++   */
++  updatePerson(person) {
++    return this._queueOperation(async () => {
++      await model.addOrUpdatePerson(person);
++      await this.refresh();
++    });
++  }
++
++  /**
++   * Updates the currently selected person
++   * @param {Object} updates - Partial person object with updated fields
++   * @returns {PersonController} The PersonController instance
++   */
++  updateCurrentPerson(updates) {
++    const currentPerson = this._personTable[this._selectedPerson];
++    return this._queueOperation(async () => {
++      await model.addOrUpdatePerson({ ...currentPerson, ...updates });
++      await this.refresh();
++    });
++  }
++
++  /**
++   * Removes a person from the database by ID
++   * @param {number} personId - ID of the person to remove
++   * @returns {PersonController} The PersonController instance
++   */
++  removePerson(personId) {
++    return this._queueOperation(async () => {
++      await model.removePerson(personId);
++      await this.refresh();
++    });
++  }
++
++  /**
++   * Removes the currently selected person
++   * @returns {PersonController} The PersonController instance
++   */
++  removeSelectedPerson() {
++    const currentPerson = this._personTable[this._selectedPerson];
++    return this.removePerson(currentPerson.id);
++  }
++
++  /**
++   * Increments the selected person index, wraps around to 0 if at end
++   * @returns {PersonController} The PersonController instance
++   */
++  incrementSelectedPerson() {
++    if (this._selectedPerson < this._personTable.length - 1) {
++      this._selectedPerson++;
++    } else {
++      this._selectedPerson = 0;
++    }
++    return this;
++  }
++
++  /**
++   * Decrements the selected person index, wraps around to end if at 0
++   * @returns {PersonController} The PersonController instance
++   */
++  decrementSelectedPerson() {
++    if (this._selectedPerson > 0) {
++      this._selectedPerson--;
++    } else {
++      this._selectedPerson = this._personTable.length - 1;
++    }
++    return this;
++  }
++
++  /**
++   * Adds new filters to the existing filter set
++   * @param {Object} filter - Filter object to merge with existing filters
++   * @param {number} [filter.taskId] - Filter by specific task ID
++   * @param {boolean} [filter.filterEmptyTasks] - Whether to filter out persons with no tasks
++   * @returns {PersonController} The PersonController instance
++   */
++  addFilter(filter) {
++    this._filters = { ...this._filters, ...filter };
++    return this._queueOperation(() => this.refresh());
++  }
++
++  /**
++   * Sets the sort direction for the person table
++   * @param {'ASC'|'DESC'} sort - Sort direction ('ASC' or 'DESC')
++   * @returns {PersonController} The PersonController instance
++   */
++  addSort(sort) {
++    this._sort = sort;
++    return this._queueOperation(() => this.refresh());
++  }
++
++  /**
++   * Gets the currently selected person
++   * @returns {Object|null} The currently selected person or null if none selected
++   */
++  getSelectedPerson() {
++    return this._personTable[this._selectedPerson] || null;
++  }
++
++  /**
++   * Gets the current person table
++   * @returns {Array<Object>} Array of person records
++   */
++  getPersonTable() {
++    return this._personTable;
++  }
++
++  /**
++   * Resets all filters to their default values
++   * @returns {PersonController} The PersonController instance
++   */
++  resetFilters() {
++    this._filters = {
++      taskId: null,
++      filterEmptyTasks: false,
++    };
++    return this._queueOperation(() => this.refresh());
++  }
++
++  /**
++   * Resets the sort order to default (ASC)
++   * @returns {PersonController} The PersonController instance
++   */
++  resetSort() {
++    this._sort = 'ASC';
++    return this._queueOperation(() => this.refresh());
++  }
++}
++
++module.exports = PersonController;
+diff --git a/controller/TaskController.js b/controller/TaskController.js
+new file mode 100644
+index 0000000..315fe4c
+--- /dev/null
++++ b/controller/TaskController.js
+@@ -0,0 +1,213 @@
++/**
++ * This file is protected by the Open Software License (OSL) v. 3.0
++ * https://opensource.org/licenses/OSL-3.0
++ */
++
++const model = require('../model/model.js');
++
++/**
++ * Controller class for managing task-related operations with chainable methods
++ * @class TaskController
++ */
++class TaskController {
++  /** @private {string} Sort direction for task listing */
++  _sort = 'ASC';
++
++  /** @private {Array<Object>} Array containing task records */
++  _taskTable = [];
++
++  /** @private {Promise<void>} Tracks pending operations */
++  _pendingOperation = Promise.resolve();
++
++  /**
++   * @private {Object} Filter settings for task queries
++   * @property {number|null} assignedTo - Filter by assigned person ID
++   * @property {string|null} relatedChannel - Filter by related channel
++   * @property {string|null} taskStatus - Filter by task status
++   */
++  _filters = {
++    assignedTo: null,
++    relatedChannel: null,
++    taskStatus: null,
++  };
++
++  /**
++   * Creates an instance of TaskController and initializes the task table
++   * @constructor
++   * @returns {TaskController} The TaskController instance
++   */
++  constructor() {
++    this._pendingOperation = this.refresh();
++    return this;
++  }
++
++  /**
++   * Refreshes the task table with current filters and sort settings
++   * @async
++   * @returns {Promise<TaskController>} The TaskController instance
++   */
++  async refresh() {
++    this._taskTable = await model.getTaskDetailsTable({
++      sort: this._sort,
++      sortBy: 'title',
++      limit: 50,
++      ...this._filters,
++    });
++    return this;
++  }
++
++  /**
++   * Queues an operation to be executed after previous operations complete
++   * @private
++   * @param {Function} operation - Async operation to queue
++   * @returns {TaskController} The TaskController instance for chaining
++   */
++  _queueOperation(operation) {
++    this._pendingOperation = this._pendingOperation.then(operation);
++    return this;
++  }
++
++  /**
++   * Waits for all pending operations to complete
++   * @async
++   * @returns {Promise<TaskController>} The TaskController instance
++   */
++  async ready() {
++    await this._pendingOperation;
++    return this;
++  }
++
++  /**
++   * Adds a new task or updates an existing one in the database
++   * @param {Object} task - Task object to add or update
++   * @param {string} task.title - Title of the task
++   * @param {string} [task.description] - Description of the task
++   * @param {number} [task.assignedTo] - ID of the person assigned to the task
++   * @param {string} [task.status] - Current status of the task
++   * @param {string} [task.relatedChannel] - Channel related to the task
++   * @returns {TaskController} The TaskController instance
++   */
++  addTask(task) {
++    return this._queueOperation(async () => {
++      await model.addOrUpdateTask(task);
++      await this.refresh();
++    });
++  }
++
++  /**
++   * Updates an existing task in the database
++   * @param {number} taskId - ID of the task to update
++   * @param {Object} updates - Object containing the fields to update
++   * @param {string} [updates.title] - Updated title of the task
++   * @param {string} [updates.description] - Updated description of the task
++   * @param {number} [updates.assignedTo] - Updated ID of the person assigned to the task
++   * @param {string} [updates.status] - Updated status of the task
++   * @param {string} [updates.relatedChannel] - Updated channel related to the task
++   * @returns {TaskController} The TaskController instance
++   */
++  updateTask(taskId, updates) {
++    return this._queueOperation(async () => {
++      await model.addOrUpdateTask({ id: taskId, ...updates });
++      await this.refresh();
++    });
++  }
++
++  /**
++   * Removes a task from the database by its ID
++   * @param {number} taskId - The ID of the task to remove
++   * @returns {TaskController} The TaskController instance
++   */
++  removeTask(taskId) {
++    return this._queueOperation(async () => {
++      await model.removeTask(taskId);
++      await this.refresh();
++    });
++  }
++
++  /**
++   * Adds new filters to the existing filter set
++   * @param {Object} filter - Filter object to merge with existing filters
++   * @param {number} [filter.assignedTo] - Filter by assigned person ID
++   * @param {string} [filter.relatedChannel] - Filter by related channel
++   * @param {string} [filter.taskStatus] - Filter by task status
++   * @param {number} [filter.id] - Filter by specific task ID
++   * @returns {TaskController} The TaskController instance
++   */
++  addFilter(filter) {
++    this._filters = { ...this._filters, ...filter };
++    return this._queueOperation(() => this.refresh());
++  }
++
++  /**
++   * Sets the sort direction for the task table
++   * @param {'ASC'|'DESC'} sort - Sort direction ('ASC' or 'DESC')
++   * @returns {TaskController} The TaskController instance
++   */
++  addSort(sort) {
++    this._sort = sort;
++    return this._queueOperation(() => this.refresh());
++  }
++
++  /**
++   * Gets the current task table
++   * @returns {Array<Object>} Array of task records
++   */
++  getTaskTable() {
++    return this._taskTable;
++  }
++
++  /**
++   * Marks a task as complete by updating its status to 'Completed'
++   * @param {number} taskId - ID of the task to mark as complete
++   * @returns {TaskController} The TaskController instance
++   */
++  markTaskComplete(taskId) {
++    return this.updateTask(taskId, { taskStatus: 'Completed' });
++  }
++
++  /**
++   * Retrieves detailed task information with additional formatting and filtering options
++   * @async
++   * @param {Object} options - Options for filtering and sorting
++   * @param {'ASC'|'DESC'} [options.sort='ASC'] - Sort direction for the task list
++   * @param {number} [options.limit=50] - Maximum number of tasks to retrieve
++   * @returns {Promise<Array<Object>>} Array of detailed task information
++   */
++  async getTaskDetailsTable(options = {}) {
++    await this._pendingOperation;
++    return await model.getTaskDetailsTable(options);
++  }
++
++  /**
++   * Resets all filters to their default values
++   * @returns {TaskController} The TaskController instance
++   */
++  resetFilters() {
++    this._filters = {
++      assignedTo: null,
++      relatedChannel: null,
++      taskStatus: null,
++      id: null,
++    };
++    return this._queueOperation(() => this.refresh());
++  }
++
++  /**
++   * Resets the sort order to default (ASC)
++   * @returns {TaskController} The TaskController instance
++   */
++  resetSort() {
++    this._sort = 'ASC';
++    return this._queueOperation(() => this.refresh());
++  }
++
++  /**
++   * delete all completed tasks
++   * @returns {TaskController} The TaskController instance
++   */
++  deleteCompletedTasks() {
++    return this._queueOperation(() => model.deleteCompletedTasks());
++  }
++}
++
++module.exports = TaskController;
+diff --git a/model/model.js b/model/model.js
+index 461ac50..35d2be7 100644
+--- a/model/model.js
++++ b/model/model.js
+@@ -61,14 +61,14 @@ function addOrUpdatePerson({ id, name, task_id }) {
+ 
+ /**
+  * Retrieves a list of tasks from the database based on the provided filters.
+- * @param {Object} filters - The filters to apply to the query.
+- * @param {number} [filters.id] - The ID of the task to retrieve.
+- * @param {number} [filters.assignedTo] - The ID of the person assigned to the task.
+- * @param {number} [filters.relatedChannel] - The ID of the related channel.
+- * @param {string} [filters.taskStatus] - The status of the task.
+- * @param {string} [filters.orderBy='title'] - The field to order the results by.
+- * @param {string} [filters.sort='ASC'] - The sort order for the results (ASC or DESC).
+- * @param {number} [filters.limit=50] - The maximum number of tasks to retrieve.
++ * @param {Object} _filters - The filters to apply to the query.
++ * @param {number} [_filters.id] - The ID of the task to retrieve.
++ * @param {number} [_filters.assignedTo] - The ID of the person assigned to the task.
++ * @param {number} [_filters.relatedChannel] - The ID of the related channel.
++ * @param {string} [_filters.taskStatus] - The status of the task.
++ * @param {string} [_filters.orderBy='title'] - The field to order the results by.
++ * @param {string} [_filters.sort='ASC'] - The sort order for the results (ASC or DESC).
++ * @param {number} [_filters.limit=50] - The maximum number of tasks to retrieve.
+  * @returns {Promise<Array<Object>> | Promise<Object | null>} - An array of tasks or a single task.
+  */
+ async function getTasks(filters = {}) {
+@@ -176,17 +176,16 @@ function addOrUpdateTask({
+     `;
+   }
+ 
+-  const result = database.prepare(statement).run(params);
+-  return result;
++  return database.prepare(statement).run(params);
+ }
+ 
+ /**
+  * Retrieves channels from the database based on the provided filters.
+- * @param {Object} filters - The filters to apply to the query.
+- * @param {number} [filters.id] - The ID of the channel to retrieve.
+- * @param {string} [filters.orderBy='channel_name'] - The field to order the results by.
+- * @param {string} [filters.sort='ASC'] - The sort order for the results (ASC or DESC).
+- * @param {number} [filters.limit=50] - The maximum number of channels to retrieve.
++ * @param {Object} _filters - The filters to apply to the query.
++ * @param {number} [_filters.id] - The ID of the channel to retrieve.
++ * @param {string} [_filters.orderBy='channel_name'] - The field to order the results by.
++ * @param {string} [_filters.sort='ASC'] - The sort order for the results (ASC or DESC).
++ * @param {number} [_filters.limit=50] - The maximum number of channels to retrieve.
+  * @returns {Promise<Array<Object>> | Promise<Object | null>} - An array of channels or a single channel.
+  */
+ async function getChannels(filters = {}) {
+@@ -246,12 +245,12 @@ function addOrUpdateChannel({ id, channel_name }) {
+ 
+ /**
+  * Retrieves remainders from the database based on the provided filters.
+- * @param {Object} filters - The filters to apply to the query.
+- * @param {number} [filters.id] - The ID of the remainder to retrieve.
+- * @param {number} [filters.task_id] - The ID of the task to filter by.
+- * @param {string} [filters.orderBy='remainder_date'] - The field to order the results by.
+- * @param {string} [filters.sort='ASC'] - The sort order for the results (ASC or DESC).
+- * @param {number} [filters.limit=50] - The maximum number of remainders to retrieve.
++ * @param {Object} _filters - The filters to apply to the query.
++ * @param {number} [_filters.id] - The ID of the remainder to retrieve.
++ * @param {number} [_filters.task_id] - The ID of the task to filter by.
++ * @param {string} [_filters.orderBy='remainder_date'] - The field to order the results by.
++ * @param {string} [_filters.sort='ASC'] - The sort order for the results (ASC or DESC).
++ * @param {number} [_filters.limit=50] - The maximum number of remainders to retrieve.
+  * @returns {Promise<Array<Object>> | Promise<Object | null>} - An array of remainders or a single remainder.
+  */
+ async function getRemainder(filters = {}) {
+@@ -414,6 +413,125 @@ function removeRemainder(id) {
+   const result = database.prepare('DELETE FROM remainder WHERE id = ?').run(id);
+   return result;
+ }
++/**
++ * Retrieves the person table in the required format.
++ * @param {Object} options - Options to filter and sort the results.
++ * @param {'ASC' | 'DESC'} [options.sort='ASC'] - Sort order for the names (ascending or descending).
++ * @param {boolean} [options.filterEmptyTasks=false] - Whether to filter out persons with no assigned tasks.
++ * @param {number} [options.limit=50] - Maximum number of records to retrieve.
++ * @returns {Promise<Array<Object>>} - An array of person details in the specified format.
++ */
++async function getPersonDetailsTable(options = {}) {
++  const { sort = 'ASC', filterEmptyTasks = false, limit = 50 } = options;
++
++  const whereCondition = filterEmptyTasks ? 'WHERE task.id IS NOT NULL' : '';
++
++  const query = `
++    SELECT 
++      person.name AS Name,
++      channel.channel_name AS "Current Channel",
++      task.title AS "Current Task",
++      task.deadline AS "Current Task Deadline",
++      remainder.remainder_date || ' ' || remainder.reminder_time AS "Current Task Next Key Point Remainder",
++      CASE WHEN task.id IS NOT NULL THEN 1 ELSE 0 END AS "Is Active"
++    FROM person
++    LEFT JOIN task ON person.task_id = task.id
++    LEFT JOIN channel ON task.related_channel = channel.id
++    LEFT JOIN remainder ON task.id = remainder.task_id
++    ${whereCondition}
++    GROUP BY person.id
++    ORDER BY person.name ${sort}
++    LIMIT @limit
++  `;
++
++  return database.prepare(query).all({ limit });
++}
++
++/**
++ * Retrieves the task table in the required format with additional filtering options.
++ * @param {Object} options - Options to filter and sort the results.
++ * @param {'ASC' | 'DESC'} [options.sort='ASC'] - Sort order for the results.
++ * @param {string} [options.sortBy='title'] - Field to sort by (title, task_status, start_date, or deadline).
++ * @param {number} [options.limit=50] - Maximum number of records to retrieve.
++ * @param {number} [options.assignedTo] - Filter by assigned person ID.
++ * @param {string} [options.taskStatus] - Filter by task status.
++ * @param {number} [options.relatedChannel] - Filter by related channel ID.
++ * @returns {Promise<Array<Object>>} - An array of task details in the specified format.
++ */
++async function getTaskDetailsTable(options = {}) {
++  const {
++    sort = 'ASC',
++    sortBy = 'title',
++    limit = 50,
++    assignedTo,
++    taskStatus,
++    relatedChannel,
++  } = options;
++
++  let whereClause = '';
++  const params = { limit };
++  const conditions = [];
++
++  if (assignedTo) {
++    conditions.push('task.assigned_to = @assignedTo');
++    params.assignedTo = assignedTo;
++  }
++  if (taskStatus) {
++    conditions.push('task.task_status = @taskStatus');
++    params.taskStatus = taskStatus;
++  }
++  if (relatedChannel) {
++    conditions.push('task.related_channel = @relatedChannel');
++    params.relatedChannel = relatedChannel;
++  }
++
++  if (conditions.length > 0) {
++    whereClause = 'WHERE ' + conditions.join(' AND ');
++  }
++
++  const query = `
++    SELECT 
++      task.title AS "Title",
++      channel.channel_name AS "Related Channel",
++      MIN(remainder.remainder_date || ' ' || remainder.reminder_time) AS "Closest Remainder",
++      task.deadline AS "Current Task Deadline",
++      task.start_date AS "Start Date",
++      person.name AS "Assigned To",
++      task.task_status AS "Task Status"
++    FROM task
++    LEFT JOIN channel ON task.related_channel = channel.id
++    LEFT JOIN remainder ON task.id = remainder.task_id
++    LEFT JOIN person ON task.assigned_to = person.id
++    ${whereClause}
++    GROUP BY task.id
++    ORDER BY ${
++      sortBy === 'title'
++        ? 'task.title'
++        : sortBy === 'task_status'
++          ? 'task.task_status'
++          : sortBy === 'start_date'
++            ? 'task.start_date'
++            : sortBy === 'deadline'
++              ? 'task.deadline'
++              : 'task.title'
++    } ${sort}
++    LIMIT @limit
++  `;
++
++  return database.prepare(query).all(params);
++}
++
++/**
++ * Deletes all tasks with a status of "Completed".
++ * @returns {Object} - The result of the database operation, including the number of deleted rows.
++ */
++function deleteCompletedTasks() {
++  const statement = `
++    DELETE FROM task
++    WHERE task_status = 'Completed'
++  `;
++  return database.prepare(statement).run();
++}
+ 
+ module.exports = {
+   getPersons,
+@@ -428,4 +546,7 @@ module.exports = {
+   removeTask,
+   removeChannel,
+   removeRemainder,
++  getPersonDetailsTable,
++  getTaskDetailsTable,
++  deleteCompletedTasks,
+ };

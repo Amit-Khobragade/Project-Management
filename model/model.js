@@ -61,14 +61,14 @@ function addOrUpdatePerson({ id, name, task_id }) {
 
 /**
  * Retrieves a list of tasks from the database based on the provided filters.
- * @param {Object} filters - The filters to apply to the query.
- * @param {number} [filters.id] - The ID of the task to retrieve.
- * @param {number} [filters.assignedTo] - The ID of the person assigned to the task.
- * @param {number} [filters.relatedChannel] - The ID of the related channel.
- * @param {string} [filters.taskStatus] - The status of the task.
- * @param {string} [filters.orderBy='title'] - The field to order the results by.
- * @param {string} [filters.sort='ASC'] - The sort order for the results (ASC or DESC).
- * @param {number} [filters.limit=50] - The maximum number of tasks to retrieve.
+ * @param {Object} _filters - The filters to apply to the query.
+ * @param {number} [_filters.id] - The ID of the task to retrieve.
+ * @param {number} [_filters.assignedTo] - The ID of the person assigned to the task.
+ * @param {number} [_filters.relatedChannel] - The ID of the related channel.
+ * @param {string} [_filters.taskStatus] - The status of the task.
+ * @param {string} [_filters.orderBy='title'] - The field to order the results by.
+ * @param {string} [_filters.sort='ASC'] - The sort order for the results (ASC or DESC).
+ * @param {number} [_filters.limit=50] - The maximum number of tasks to retrieve.
  * @returns {Promise<Array<Object>> | Promise<Object | null>} - An array of tasks or a single task.
  */
 async function getTasks(filters = {}) {
@@ -176,17 +176,16 @@ function addOrUpdateTask({
     `;
   }
 
-  const result = database.prepare(statement).run(params);
-  return result;
+  return database.prepare(statement).run(params);
 }
 
 /**
  * Retrieves channels from the database based on the provided filters.
- * @param {Object} filters - The filters to apply to the query.
- * @param {number} [filters.id] - The ID of the channel to retrieve.
- * @param {string} [filters.orderBy='channel_name'] - The field to order the results by.
- * @param {string} [filters.sort='ASC'] - The sort order for the results (ASC or DESC).
- * @param {number} [filters.limit=50] - The maximum number of channels to retrieve.
+ * @param {Object} _filters - The filters to apply to the query.
+ * @param {number} [_filters.id] - The ID of the channel to retrieve.
+ * @param {string} [_filters.orderBy='channel_name'] - The field to order the results by.
+ * @param {string} [_filters.sort='ASC'] - The sort order for the results (ASC or DESC).
+ * @param {number} [_filters.limit=50] - The maximum number of channels to retrieve.
  * @returns {Promise<Array<Object>> | Promise<Object | null>} - An array of channels or a single channel.
  */
 async function getChannels(filters = {}) {
@@ -246,12 +245,12 @@ function addOrUpdateChannel({ id, channel_name }) {
 
 /**
  * Retrieves remainders from the database based on the provided filters.
- * @param {Object} filters - The filters to apply to the query.
- * @param {number} [filters.id] - The ID of the remainder to retrieve.
- * @param {number} [filters.task_id] - The ID of the task to filter by.
- * @param {string} [filters.orderBy='remainder_date'] - The field to order the results by.
- * @param {string} [filters.sort='ASC'] - The sort order for the results (ASC or DESC).
- * @param {number} [filters.limit=50] - The maximum number of remainders to retrieve.
+ * @param {Object} _filters - The filters to apply to the query.
+ * @param {number} [_filters.id] - The ID of the remainder to retrieve.
+ * @param {number} [_filters.task_id] - The ID of the task to filter by.
+ * @param {string} [_filters.orderBy='remainder_date'] - The field to order the results by.
+ * @param {string} [_filters.sort='ASC'] - The sort order for the results (ASC or DESC).
+ * @param {number} [_filters.limit=50] - The maximum number of remainders to retrieve.
  * @returns {Promise<Array<Object>> | Promise<Object | null>} - An array of remainders or a single remainder.
  */
 async function getRemainder(filters = {}) {
@@ -414,6 +413,125 @@ function removeRemainder(id) {
   const result = database.prepare('DELETE FROM remainder WHERE id = ?').run(id);
   return result;
 }
+/**
+ * Retrieves the person table in the required format.
+ * @param {Object} options - Options to filter and sort the results.
+ * @param {'ASC' | 'DESC'} [options.sort='ASC'] - Sort order for the names (ascending or descending).
+ * @param {boolean} [options.filterEmptyTasks=false] - Whether to filter out persons with no assigned tasks.
+ * @param {number} [options.limit=50] - Maximum number of records to retrieve.
+ * @returns {Promise<Array<Object>>} - An array of person details in the specified format.
+ */
+async function getPersonDetailsTable(options = {}) {
+  const { sort = 'ASC', filterEmptyTasks = false, limit = 50 } = options;
+
+  const whereCondition = filterEmptyTasks ? 'WHERE task.id IS NOT NULL' : '';
+
+  const query = `
+    SELECT 
+      person.name AS Name,
+      channel.channel_name AS "Current Channel",
+      task.title AS "Current Task",
+      task.deadline AS "Current Task Deadline",
+      remainder.remainder_date || ' ' || remainder.reminder_time AS "Current Task Next Key Point Remainder",
+      CASE WHEN task.id IS NOT NULL THEN 1 ELSE 0 END AS "Is Active"
+    FROM person
+    LEFT JOIN task ON person.task_id = task.id
+    LEFT JOIN channel ON task.related_channel = channel.id
+    LEFT JOIN remainder ON task.id = remainder.task_id
+    ${whereCondition}
+    GROUP BY person.id
+    ORDER BY person.name ${sort}
+    LIMIT @limit
+  `;
+
+  return database.prepare(query).all({ limit });
+}
+
+/**
+ * Retrieves the task table in the required format with additional filtering options.
+ * @param {Object} options - Options to filter and sort the results.
+ * @param {'ASC' | 'DESC'} [options.sort='ASC'] - Sort order for the results.
+ * @param {string} [options.sortBy='title'] - Field to sort by (title, task_status, start_date, or deadline).
+ * @param {number} [options.limit=50] - Maximum number of records to retrieve.
+ * @param {number} [options.assignedTo] - Filter by assigned person ID.
+ * @param {string} [options.taskStatus] - Filter by task status.
+ * @param {number} [options.relatedChannel] - Filter by related channel ID.
+ * @returns {Promise<Array<Object>>} - An array of task details in the specified format.
+ */
+async function getTaskDetailsTable(options = {}) {
+  const {
+    sort = 'ASC',
+    sortBy = 'title',
+    limit = 50,
+    assignedTo,
+    taskStatus,
+    relatedChannel,
+  } = options;
+
+  let whereClause = '';
+  const params = { limit };
+  const conditions = [];
+
+  if (assignedTo) {
+    conditions.push('task.assigned_to = @assignedTo');
+    params.assignedTo = assignedTo;
+  }
+  if (taskStatus) {
+    conditions.push('task.task_status = @taskStatus');
+    params.taskStatus = taskStatus;
+  }
+  if (relatedChannel) {
+    conditions.push('task.related_channel = @relatedChannel');
+    params.relatedChannel = relatedChannel;
+  }
+
+  if (conditions.length > 0) {
+    whereClause = 'WHERE ' + conditions.join(' AND ');
+  }
+
+  const query = `
+    SELECT 
+      task.title AS "Title",
+      channel.channel_name AS "Related Channel",
+      MIN(remainder.remainder_date || ' ' || remainder.reminder_time) AS "Closest Remainder",
+      task.deadline AS "Current Task Deadline",
+      task.start_date AS "Start Date",
+      person.name AS "Assigned To",
+      task.task_status AS "Task Status"
+    FROM task
+    LEFT JOIN channel ON task.related_channel = channel.id
+    LEFT JOIN remainder ON task.id = remainder.task_id
+    LEFT JOIN person ON task.assigned_to = person.id
+    ${whereClause}
+    GROUP BY task.id
+    ORDER BY ${
+      sortBy === 'title'
+        ? 'task.title'
+        : sortBy === 'task_status'
+          ? 'task.task_status'
+          : sortBy === 'start_date'
+            ? 'task.start_date'
+            : sortBy === 'deadline'
+              ? 'task.deadline'
+              : 'task.title'
+    } ${sort}
+    LIMIT @limit
+  `;
+
+  return database.prepare(query).all(params);
+}
+
+/**
+ * Deletes all tasks with a status of "Completed".
+ * @returns {Object} - The result of the database operation, including the number of deleted rows.
+ */
+function deleteCompletedTasks() {
+  const statement = `
+    DELETE FROM task
+    WHERE task_status = 'Completed'
+  `;
+  return database.prepare(statement).run();
+}
 
 module.exports = {
   getPersons,
@@ -428,4 +546,7 @@ module.exports = {
   removeTask,
   removeChannel,
   removeRemainder,
+  getPersonDetailsTable,
+  getTaskDetailsTable,
+  deleteCompletedTasks,
 };
