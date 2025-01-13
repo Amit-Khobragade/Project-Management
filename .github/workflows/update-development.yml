@@ -30,7 +30,7 @@ jobs:
     - name: Merge main into development
       run: |
         git checkout development
-        git merge main --ff-only
+        git merge main --ff-only --allow-unrelated-histories
 
     # Push the changes
     - name: Push changes to development
