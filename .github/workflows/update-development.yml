@@ -30,6 +30,7 @@ jobs:
     - name: Merge main into development
       run: |
         git checkout development
+        git config --global  pull.ff true
         git merge main --ff-only --allow-unrelated-histories
 
     # Push the changes
