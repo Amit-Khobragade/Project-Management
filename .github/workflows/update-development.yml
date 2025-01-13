@@ -30,7 +30,7 @@ jobs:
     - name: Merge main into development
       run: |
         git checkout development        
-        git merge main --allow-unrelated-histories --squash
+        git merge main --allow-unrelated-histories --no-ff -m 'Merged main branch with the development branch'
 
     # Push the changes
     - name: Push changes to development
