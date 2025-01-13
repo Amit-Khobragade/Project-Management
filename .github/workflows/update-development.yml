@@ -30,7 +30,7 @@ jobs:
     - name: Merge main into development
       run: |
         git checkout development        
-        git merge main --no-ff --allow-unrelated-histories -m 'chore: Merged main branch into development for the latest changes'
+        git merge main --no-ff --allow-unrelated-histories --no-commit
 
     # Push the changes
     - name: Push changes to development
