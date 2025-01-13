@@ -31,7 +31,6 @@ jobs:
       run: |
         git checkout development
         git rebase main 
-        git rebase --continue
 
     # Push the changes
     - name: Push changes to development
