@@ -29,9 +29,8 @@ jobs:
     # Merge main into development
     - name: Merge main into development
       run: |
-        git checkout development
-        git config --global  pull.ff true
-        git merge main --ff-only --allow-unrelated-histories
+        git checkout development        
+        git merge main --no-ff --allow-unrelated-histories -m 'chore: Merged main branch into development for the latest changes'
 
     # Push the changes
     - name: Push changes to development
