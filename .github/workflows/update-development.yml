@@ -30,9 +30,7 @@ jobs:
     - name: Merge main into development
       run: |
         git checkout development
-        git rebase main 
-        git add .
-        git rebase --continue
+        git merge main --ff-only
 
     # Push the changes
     - name: Push changes to development
