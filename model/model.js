@@ -533,6 +533,33 @@ function deleteCompletedTasks() {
   return database.prepare(statement).run();
 }
 
+/**
+ * Retrieves detailed information about channels, including title, number of active devs, and active tasks
+ * @async
+ * @param {Object} options - Options for filtering and sorting
+ * @param {'ASC'|'DESC'} [options.sort='ASC'] - Sort direction for the channel list
+ * @param {number} [options.limit=50] - Maximum number of channels to retrieve
+ * @returns {Promise<Array<Object>>} Array of detailed channel information
+ */
+function getChannelDetailsTable(options = {}) {
+  const { sort = 'ASC', limit = 50 } = options;
+
+  const query = `
+      SELECT 
+        channel.channel_name AS "Channel Title",
+        COUNT(DISTINCT person.id) AS "Number of Active Devs",
+        COUNT(DISTINCT task.id) AS "Number of Active Tasks"
+      FROM channel
+      LEFT JOIN task ON channel.id = task.related_channel AND task.task_status != 'Completed'
+      LEFT JOIN person ON person.task_id = task.id
+      GROUP BY channel.id
+      ORDER BY channel.channel_name ${sort}
+      LIMIT @limit
+    `;
+
+  return database.prepare(query).all({ limit });
+}
+
 module.exports = {
   getPersons,
   addOrUpdatePerson,
@@ -549,4 +576,5 @@ module.exports = {
   getPersonDetailsTable,
   getTaskDetailsTable,
   deleteCompletedTasks,
+  getChannelDetailsTable,
 };
