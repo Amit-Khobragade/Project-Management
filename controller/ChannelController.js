@@ -13,6 +13,9 @@ class ChannelController {
   /** @private {string} Sort direction for channel listing */
   _sort = 'ASC';
 
+  /** @private {number} Index of the currently selected channel */
+  _selectedChannel = 0;
+
   /** @private {Array<Object>} Array containing channel records */
   _channelTable = [];
 
@@ -132,6 +135,62 @@ class ChannelController {
    */
   getChannelTable() {
     return this._channelTable;
+  }
+
+  /**
+   * Gets the currently selected channel
+   * @returns {Object|null} The currently selected channel or null if none selected
+   */
+  getSelectedChannel() {
+    return this._channelTable[this._selectedChannel] || null;
+  }
+
+  /**
+   * Updates the currently selected channel
+   * @param {Object} updates - Partial channel object with updated fields
+   * @returns {ChannelController} The ChannelController instance
+   */
+  updateCurrentChannel(updates) {
+    const currentChannel = this._channelTable[this._selectedChannel];
+    return this._queueOperation(async () => {
+      await model.addOrUpdateChannel({ ...currentChannel, ...updates });
+      await this.refresh();
+    });
+  }
+
+  /**
+   * Removes the currently selected channel
+   * @returns {ChannelController} The ChannelController instance
+   */
+  removeSelectedChannel() {
+    const currentChannel = this._channelTable[this._selectedChannel];
+    return this.removeChannel(currentChannel.id);
+  }
+
+  /**
+   * Increments the selected channel index, wraps around to 0 if at end
+   * @returns {ChannelController} The ChannelController instance
+   */
+  incrementSelectedChannel() {
+    if (this._selectedChannel < this._channelTable.length - 1) {
+      this._selectedChannel++;
+    } else {
+      this._selectedChannel = 0;
+    }
+    return this;
+  }
+
+  /**
+   * Decrements the selected channel index, wraps around to end if at 0
+   * @returns {ChannelController} The ChannelController instance
+   */
+  decrementSelectedChannel() {
+    if (this._selectedChannel > 0) {
+      this._selectedChannel--;
+    } else {
+      this._selectedChannel = this._channelTable.length - 1;
+    }
+    return this;
   }
 }
 
