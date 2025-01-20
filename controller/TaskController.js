@@ -13,6 +13,9 @@ class TaskController {
   /** @private {string} Sort direction for task listing */
   _sort = 'ASC';
 
+  /** @private {number} Index of the currently selected task */
+  _selectedTask = 0;
+
   /** @private {Array<Object>} Array containing task records */
   _taskTable = [];
 
@@ -207,6 +210,62 @@ class TaskController {
    */
   deleteCompletedTasks() {
     return this._queueOperation(() => model.deleteCompletedTasks());
+  }
+
+  /**
+   * Gets the currently selected task
+   * @returns {Object|null} The currently selected task or null if none selected
+   */
+  getSelectedTask() {
+    return this._taskTable[this._selectedTask] || null;
+  }
+
+  /**
+   * Updates the currently selected task
+   * @param {Object} updates - Partial task object with updated fields
+   * @returns {TaskController} The TaskController instance
+   */
+  updateCurrentTask(updates) {
+    const currentTask = this._taskTable[this._selectedTask];
+    return this._queueOperation(async () => {
+      await model.addOrUpdateTask({ ...currentTask, ...updates });
+      await this.refresh();
+    });
+  }
+
+  /**
+   * Removes the currently selected task
+   * @returns {TaskController} The TaskController instance
+   */
+  removeSelectedTask() {
+    const currentTask = this._taskTable[this._selectedTask];
+    return this.removeTask(currentTask.id);
+  }
+
+  /**
+   * Increments the selected task index, wraps around to 0 if at end
+   * @returns {TaskController} The TaskController instance
+   */
+  incrementSelectedTask() {
+    if (this._selectedTask < this._taskTable.length - 1) {
+      this._selectedTask++;
+    } else {
+      this._selectedTask = 0;
+    }
+    return this;
+  }
+
+  /**
+   * Decrements the selected task index, wraps around to end if at 0
+   * @returns {TaskController} The TaskController instance
+   */
+  decrementSelectedTask() {
+    if (this._selectedTask > 0) {
+      this._selectedTask--;
+    } else {
+      this._selectedTask = this._taskTable.length - 1;
+    }
+    return this;
   }
 }
 
